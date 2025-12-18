@@ -83,7 +83,10 @@ class MultiDecoderAutoencoder(nn.Module):
         z = self.encoder(x)
 
         # choose decoder
-        decoder = self.decoders[str(int(bearing_id))]
-        reconstructed = decoder(z)
-
-        return reconstructed
+        output_list = []
+        batch_size = bearing_id.shape[0]
+        for i in range(batch_size):
+            decoder = self.decoders[str(int(bearing_id[i].item()))]
+            reconstructed = decoder(z[i].unsqueeze(0))
+            output_list.append(reconstructed)
+        return torch.cat(output_list, dim=0)
