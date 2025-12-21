@@ -52,7 +52,6 @@ def validate_model(model, dataloader):
     loss_fn = MSELoss()
     model.eval()
     epoch_loss = 0.0
-
     with torch.no_grad():
         for window, bearing_ids in dataloader:
             window = window.to(next(model.parameters()).device)
@@ -67,6 +66,31 @@ def validate_model(model, dataloader):
     print(f"Validation Loss: {epoch_loss:.4f}")
 
     return epoch_loss
+
+def validate_model_with_batch_losses(model, dataLoader):
+    """This is a function to validate the multi-headed autoencoder model.
+    """
+    loss_fn = MSELoss()
+    model.eval()
+
+    loss_stored = 0
+    batch_losses = []   # store per-batch loss 
+
+    with torch.no_grad():
+        for batch_idx, (window, bearing_ids) in enumerate(dataLoader):
+            window = window.to(next(model.parameters()).device)
+            bearing_ids = bearing_ids.to(next(model.parameters()).device)#makes sure data is on the same device as model prevents unecessary data transfer
+            reconstructed = model(window, bearing_ids)
+            loss = loss_fn(reconstructed, window)
+
+            loss_value = loss.item()
+            batch_losses.append(loss_value)
+            loss_stored += loss_value
+
+    loss_stored /= len(dataLoader)
+    print(f"Validation Loss: {loss_stored:.4f}")
+
+    return loss_stored, batch_losses
 
 
 def main():
@@ -85,14 +109,21 @@ def main():
         healthy_paths, batch_size=128
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)#lr->learning rate
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)#lr->learning rate 
 
-    epochs = 10
+    epochs = 5
     for epoch in range(epochs):
         print(f"\nEpoch {epoch + 1}/{epochs}")
         train_model(model, train_loader, optimizer, epochs=1)
         validate_model(model, val_loader)
-
-
+    loss , batch_losses = validate_model_with_batch_losses(model, val_loader)
+    numpy_losses = np.array(batch_losses)
+    torch.save(model.state_dict(), "src/output/multiheaded_autoencoder.pth")
+    mean_loss = np.mean(numpy_losses)
+    std_loss = np.std(numpy_losses)
+    print(f"Mean Batch Loss: {mean_loss:.4f}, Std Dev: {std_loss:.4f}")
+    k=3
+    threshold = mean_loss + k * std_loss
+    print(f"Anomaly Detection Threshold: {threshold:.4f}")
 if __name__ == "__main__":
     main()
